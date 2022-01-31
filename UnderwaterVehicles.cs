@@ -143,7 +143,7 @@ namespace Oxide.Plugins
                     }
                     float throttleDrag = (throttleInput != 0) ? 0 : 0.25f;
                     drag = Mathf.Max(waterFactor, drag);
-                    drag = Mathf.Max(drag, car.carPhysics.GetModifiedDrag());
+                    drag = Mathf.Max(drag, car.GetModifiedDrag());
                     car.rigidBody.drag = Mathf.Max(throttleDrag, drag);
                     car.rigidBody.angularDrag = drag * 0.5f;
                     timeSinceWaterCheck = 0;
