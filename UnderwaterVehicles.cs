@@ -8,23 +8,44 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Underwater Vehicles", "WhiteThunder", "1.1.0")]
-    [Description("Allows helicopters and modular cars to be used underwater.")]
+    [Info("Underwater Vehicles", "WhiteThunder", "1.2.0")]
+    [Description("Allows modular cars, snowmobiles and helicopters to be used underwater.")]
     internal class UnderwaterVehicles : CovalencePlugin
     {
+        #region Fields
+
+        private static UnderwaterVehicles _pluginInstance;
         private Configuration _pluginConfig;
+
+        #endregion
 
         #region Hooks
 
+        private void Init()
+        {
+            _pluginInstance = this;
+        }
+
         private void Unload()
         {
-            if (_pluginConfig.AllowedVehicles.ModularCar && _pluginConfig.ModularCarSettings.UnderwaterDragMultiplier != 1.0f)
+            foreach (var entity in BaseNetworkable.serverEntities)
             {
-                foreach (var car in BaseNetworkable.serverEntities.OfType<ModularCar>())
+                var heli = entity as MiniCopter;
+                if (heli != null)
                 {
-                    TeardownCarDragReducer(car);
+                    UnderwaterVehicleComponent.RemoveFromVehicle(heli);
+                    continue;
+                }
+
+                var groundVehicle = entity as GroundVehicle;
+                if (groundVehicle != null)
+                {
+                    UnderwaterVehicleComponent.RemoveFromVehicle(groundVehicle);
+                    continue;
                 }
             }
+
+            _pluginInstance = null;
         }
 
         private void OnServerInitialized(bool initialBoot)
@@ -56,12 +77,7 @@ namespace Oxide.Plugins
             {
                 if (_pluginConfig.AllowedVehicles.ModularCar)
                 {
-                    MoveWaterSample(car.waterloggedPoint);
-
-                    if (_pluginConfig.ModularCarSettings.UnderwaterDragMultiplier != 1.0f)
-                    {
-                        SetupCarDragReducer(car);
-                    }
+                    UnderwaterVehicleComponent.AddToVehicle(car, _pluginConfig.DragSettings.ModularCar);
                 }
                 return;
             }
@@ -73,15 +89,14 @@ namespace Oxide.Plugins
                 {
                     if (_pluginConfig.AllowedVehicles.Snowmobile)
                     {
-                        LogWarning($"Enabling for snowmobile");
-                        MoveWaterSample(snowmobile.waterloggedPoint);
+                        UnderwaterVehicleComponent.AddToVehicle(snowmobile, _pluginConfig.DragSettings.Snowmobile);
                     }
                 }
                 else if (snowmobile.ShortPrefabName == "tomahasnowmobile")
                 {
                     if (_pluginConfig.AllowedVehicles.TomahaSnowmobile)
                     {
-                        MoveWaterSample(snowmobile.waterloggedPoint);
+                        UnderwaterVehicleComponent.AddToVehicle(snowmobile, _pluginConfig.DragSettings.TomahaSnowmobile);
                     }
                 }
                 return;
@@ -94,12 +109,12 @@ namespace Oxide.Plugins
             {
                 if (_pluginConfig.AllowedVehicles.ScrapTransportHelicopter)
                 {
-                    MoveWaterSample(heli.waterSample);
+                    UnderwaterVehicleComponent.AddToVehicle(heli);
                 }
             }
             else if (_pluginConfig.AllowedVehicles.Minicopter)
             {
-                MoveWaterSample(heli.waterSample);
+                UnderwaterVehicleComponent.AddToVehicle(heli);
             }
         }
 
@@ -107,62 +122,121 @@ namespace Oxide.Plugins
 
         #region Helper Methods
 
-        private void MoveWaterSample(Transform transform)
+        private static void SetTimeSinceWaterCheck(GroundVehicle groundVehicle, float value)
         {
-            if (transform.parent == null)
+            var snowmobile = groundVehicle as Snowmobile;
+            if (snowmobile != null)
+            {
+                snowmobile.carPhysics.timeSinceWaterCheck = value;
                 return;
+            }
 
-            transform.SetParent(null);
-            transform.SetPositionAndRotation(Vector3.up * 1000, Quaternion.identity);
-        }
-
-        private void SetupCarDragReducer(ModularCar car)
-        {
-            car.carPhysics.timeSinceWaterCheck = float.MinValue;
-            car.gameObject.AddComponent<CarDragReducer>().underwaterDragMultiplier = _pluginConfig.ModularCarSettings.UnderwaterDragMultiplier;
-        }
-
-        private void TeardownCarDragReducer(ModularCar car)
-        {
-            car.carPhysics.timeSinceWaterCheck = 0;
-            UnityEngine.Object.Destroy(car.gameObject.GetComponent<CarDragReducer>());
+            var car = groundVehicle as ModularCar;
+            if (car != null)
+            {
+                car.carPhysics.timeSinceWaterCheck = value;
+                return;
+            }
         }
 
         #endregion
 
         #region Helper Classes
 
-        internal class CarDragReducer : MonoBehaviour
+        private class UnderwaterVehicleComponent : FacepunchBehaviour
         {
-            public float underwaterDragMultiplier = 1f;
+            public static void AddToVehicle(BaseVehicle vehicle, float dragMultiplier = 1) =>
+                vehicle.gameObject.AddComponent<UnderwaterVehicleComponent>().Init(dragMultiplier);
 
-            private TimeSince timeSinceWaterCheck = default(TimeSince);
-            private ModularCar car;
+            public static void RemoveFromVehicle(BaseVehicle vehicle) =>
+                DestroyImmediate(vehicle.gameObject.GetComponent<UnderwaterVehicleComponent>());
+
+            private BaseVehicle _vehicle;
+            private Transform _waterLoggedPoint;
+            private Vector3 _waterLoggedPointLocalPosition;
+
+            private GroundVehicle _groundVehicle;
+            private float _dragMultiplier = 1;
 
             private void Awake()
             {
-                car = GetComponent<ModularCar>();
+                _vehicle = GetComponent<BaseVehicle>();
+                _groundVehicle = _vehicle as GroundVehicle;
+
+                var groundVehicle = _vehicle as GroundVehicle;
+                if (groundVehicle != null)
+                {
+                    _waterLoggedPoint = groundVehicle.waterloggedPoint;
+                }
+
+                var heli = _vehicle as MiniCopter;
+                if (heli != null)
+                {
+                    _waterLoggedPoint = heli.waterSample;
+                }
+
+                if (_waterLoggedPoint != null && _waterLoggedPoint.parent != null)
+                {
+                    _waterLoggedPointLocalPosition = _waterLoggedPoint.localPosition;
+                    _waterLoggedPoint.SetParent(null);
+                    _waterLoggedPoint.position = new Vector3(0, 1000, 0);
+                }
             }
 
-            private void FixedUpdate()
+            public void Init(float dragMultiplier)
             {
-                // Most of this code is identical to the vanilla drag computation
-                if (timeSinceWaterCheck > 0.25f)
+                if (dragMultiplier == 1 || _groundVehicle == null)
+                    return;
+
+                _dragMultiplier = dragMultiplier;
+
+                SetTimeSinceWaterCheck(_groundVehicle, float.MinValue);
+                InvokeRandomized(CheckWater, 0.25f, 0.25f, 0.05f);
+            }
+
+            private void CheckWater()
+            {
+                _pluginInstance?.TrackStart();
+
+                if (!_groundVehicle.rigidBody.IsSleeping())
                 {
-                    float throttleInput = car.IsOn() ? car.GetThrottleInput() : 0;
-                    float waterFactor = car.WaterFactor() * underwaterDragMultiplier;
+                    // Most of this code is identical to the vanilla drag computation
+                    float throttleInput = _groundVehicle.IsOn() ? _groundVehicle.GetThrottleInput() : 0;
+                    float waterFactor = _groundVehicle.WaterFactor() * _dragMultiplier;
                     float drag = 0f;
                     TriggerVehicleDrag triggerResult;
-                    if (car.FindTrigger(out triggerResult))
+                    if (_groundVehicle.FindTrigger(out triggerResult))
                     {
                         drag = triggerResult.vehicleDrag;
                     }
                     float throttleDrag = (throttleInput != 0) ? 0 : 0.25f;
                     drag = Mathf.Max(waterFactor, drag);
-                    drag = Mathf.Max(drag, car.GetModifiedDrag());
-                    car.rigidBody.drag = Mathf.Max(throttleDrag, drag);
-                    car.rigidBody.angularDrag = drag * 0.5f;
-                    timeSinceWaterCheck = 0;
+                    drag = Mathf.Max(drag, _groundVehicle.GetModifiedDrag());
+                    _groundVehicle.rigidBody.drag = Mathf.Max(throttleDrag, drag);
+                    _groundVehicle.rigidBody.angularDrag = drag * 0.5f;
+                }
+
+                _pluginInstance?.TrackEnd();
+            }
+
+            private void OnDestroy()
+            {
+                if (_waterLoggedPoint != null)
+                {
+                    if (_vehicle != null && !_vehicle.IsDestroyed)
+                    {
+                        _waterLoggedPoint.SetParent(_vehicle.transform);
+                        _waterLoggedPoint.transform.localPosition = _waterLoggedPointLocalPosition;
+                    }
+                    else
+                    {
+                        Destroy(_waterLoggedPoint.gameObject);
+                    }
+                }
+
+                if (_dragMultiplier != 1 && _groundVehicle != null && !_groundVehicle.IsDestroyed)
+                {
+                    SetTimeSinceWaterCheck(_groundVehicle, UnityEngine.Random.Range(0f, 0.25f));
                 }
             }
         }
@@ -172,15 +246,6 @@ namespace Oxide.Plugins
         #region Configuration
 
         private Configuration GetDefaultConfig() => new Configuration();
-
-        private class Configuration : SerializableConfiguration
-        {
-            [JsonProperty("AllowedVehicles")]
-            public AllowedVehiclesConfig AllowedVehicles = new AllowedVehiclesConfig();
-
-            [JsonProperty("ModularCarSettings")]
-            public ModularCarSettings ModularCarSettings = new ModularCarSettings();
-        }
 
         private class AllowedVehiclesConfig
         {
@@ -200,10 +265,36 @@ namespace Oxide.Plugins
             public bool TomahaSnowmobile = false;
         }
 
+        private class DragMultipliers
+        {
+            [JsonProperty("ModularCar")]
+            public float ModularCar = 1;
+
+            [JsonProperty("Snowmobile")]
+            public float Snowmobile = 1;
+
+            [JsonProperty("TomahaSnowmobile")]
+            public float TomahaSnowmobile = 1;
+        }
+
         private class ModularCarSettings
         {
             [JsonProperty("UnderwaterDragMultiplier")]
-            public float UnderwaterDragMultiplier = 1.0f;
+            public float UnderwaterDragMultiplier = 1;
+        }
+
+        private class Configuration : SerializableConfiguration
+        {
+            [JsonProperty("AllowedVehicles")]
+            public AllowedVehiclesConfig AllowedVehicles = new AllowedVehiclesConfig();
+
+            [JsonProperty("UnderwaterDragMultiplier")]
+            public DragMultipliers DragSettings = new DragMultipliers();
+
+            // Deprecated
+            [JsonProperty("ModularCarSettings")]
+            public ModularCarSettings ModularCarSettings
+            { set { DragSettings.ModularCar = value.UnderwaterDragMultiplier; } }
         }
 
         #endregion
