@@ -21,7 +21,9 @@ namespace Oxide.Plugins
             if (_pluginConfig.AllowedVehicles.ModularCar && _pluginConfig.ModularCarSettings.UnderwaterDragMultiplier != 1.0f)
             {
                 foreach (var car in BaseNetworkable.serverEntities.OfType<ModularCar>())
+                {
                     TeardownCarDragReducer(car);
+                }
             }
         }
 
@@ -31,61 +33,74 @@ namespace Oxide.Plugins
 
             foreach (var entity in BaseNetworkable.serverEntities)
             {
-                // Must go before MiniCopter
-                var scrapHeli = entity as ScrapTransportHelicopter;
-                if (scrapHeli != null)
+                var heli = entity as MiniCopter;
+                if (heli != null)
                 {
-                    if (allowedVehicles.ScrapTransportHelicopter)
-                        MoveWaterSample(scrapHeli.waterSample);
-
+                    OnEntitySpawned(heli);
                     continue;
                 }
 
-                var mini = entity as MiniCopter;
-                if (mini != null)
+                var groundVehicle = entity as GroundVehicle;
+                if (groundVehicle != null)
                 {
-                    if (allowedVehicles.Minicopter)
-                        MoveWaterSample(mini.waterSample);
-
-                    continue;
-                }
-
-                var car = entity as ModularCar;
-                if (car != null)
-                {
-                    if (allowedVehicles.ModularCar)
-                    {
-                        MoveWaterSample(car.waterSample);
-
-                        if (!initialBoot && _pluginConfig.ModularCarSettings.UnderwaterDragMultiplier != 1.0f)
-                            SetupCarDragReducer(car);
-                    }
-
+                    OnEntitySpawned(groundVehicle);
                     continue;
                 }
             }
         }
 
-        void OnEntitySpawned(ModularCar car)
+        private void OnEntitySpawned(GroundVehicle vehicle)
         {
-            if (_pluginConfig.AllowedVehicles.ModularCar)
+            var car = vehicle as ModularCar;
+            if (car != null)
             {
-                MoveWaterSample(car.waterSample);
+                if (_pluginConfig.AllowedVehicles.ModularCar)
+                {
+                    MoveWaterSample(car.waterloggedPoint);
 
-                if (_pluginConfig.ModularCarSettings.UnderwaterDragMultiplier != 1.0f)
-                    SetupCarDragReducer(car);
+                    if (_pluginConfig.ModularCarSettings.UnderwaterDragMultiplier != 1.0f)
+                    {
+                        SetupCarDragReducer(car);
+                    }
+                }
+                return;
+            }
+
+            var snowmobile = vehicle as Snowmobile;
+            if (snowmobile != null)
+            {
+                if (snowmobile.ShortPrefabName == "snowmobile")
+                {
+                    if (_pluginConfig.AllowedVehicles.Snowmobile)
+                    {
+                        LogWarning($"Enabling for snowmobile");
+                        MoveWaterSample(snowmobile.waterloggedPoint);
+                    }
+                }
+                else if (snowmobile.ShortPrefabName == "tomahasnowmobile")
+                {
+                    if (_pluginConfig.AllowedVehicles.TomahaSnowmobile)
+                    {
+                        MoveWaterSample(snowmobile.waterloggedPoint);
+                    }
+                }
+                return;
             }
         }
 
-        void OnEntitySpawned(MiniCopter heli)
+        private void OnEntitySpawned(MiniCopter heli)
         {
             if (heli is ScrapTransportHelicopter)
             {
                 if (_pluginConfig.AllowedVehicles.ScrapTransportHelicopter)
+                {
                     MoveWaterSample(heli.waterSample);
+                }
             }
             else if (_pluginConfig.AllowedVehicles.Minicopter)
+            {
                 MoveWaterSample(heli.waterSample);
+            }
         }
 
         #endregion
@@ -177,6 +192,12 @@ namespace Oxide.Plugins
 
             [JsonProperty("ScrapTransportHelicopter")]
             public bool ScrapTransportHelicopter = false;
+
+            [JsonProperty("Snowmobile")]
+            public bool Snowmobile = false;
+
+            [JsonProperty("TomahaSnowmobile")]
+            public bool TomahaSnowmobile = false;
         }
 
         private class ModularCarSettings

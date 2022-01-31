@@ -9,7 +9,9 @@ Default configuration:
   "AllowedVehicles": {
     "Minicopter": false,
     "ModularCar": false,
-    "ScrapTransportHelicopter": false
+    "ScrapTransportHelicopter": false,
+    "Snowmobile": false,
+    "TomahaSnowmobile": false
   },
   "ModularCarSettings": {
     "UnderwaterDragMultiplier": 1.0
