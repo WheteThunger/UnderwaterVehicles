@@ -1,6 +1,7 @@
 ﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
+using System;
 using System.Linq;
 using System.Collections.Generic;
 using UnityEngine;
@@ -11,13 +12,13 @@ namespace Oxide.Plugins
     [Description("Allows helicopters and modular cars to be used underwater.")]
     internal class UnderwaterVehicles : CovalencePlugin
     {
-        private Configuration pluginConfig;
+        private Configuration _pluginConfig;
 
         #region Hooks
 
         private void Unload()
         {
-            if (pluginConfig.AllowedVehicles.ModularCar && pluginConfig.ModularCarSettings.UnderwaterDragMultiplier != 1.0f)
+            if (_pluginConfig.AllowedVehicles.ModularCar && _pluginConfig.ModularCarSettings.UnderwaterDragMultiplier != 1.0f)
             {
                 foreach (var car in BaseNetworkable.serverEntities.OfType<ModularCar>())
                     TeardownCarDragReducer(car);
@@ -26,7 +27,7 @@ namespace Oxide.Plugins
 
         private void OnServerInitialized(bool initialBoot)
         {
-            var allowedVehicles = pluginConfig.AllowedVehicles;
+            var allowedVehicles = _pluginConfig.AllowedVehicles;
 
             foreach (var entity in BaseNetworkable.serverEntities)
             {
@@ -56,7 +57,7 @@ namespace Oxide.Plugins
                     {
                         MoveWaterSample(car.waterSample);
 
-                        if (!initialBoot && pluginConfig.ModularCarSettings.UnderwaterDragMultiplier != 1.0f)
+                        if (!initialBoot && _pluginConfig.ModularCarSettings.UnderwaterDragMultiplier != 1.0f)
                             SetupCarDragReducer(car);
                     }
 
@@ -67,11 +68,11 @@ namespace Oxide.Plugins
 
         void OnEntitySpawned(ModularCar car)
         {
-            if (pluginConfig.AllowedVehicles.ModularCar)
+            if (_pluginConfig.AllowedVehicles.ModularCar)
             {
                 MoveWaterSample(car.waterSample);
 
-                if (pluginConfig.ModularCarSettings.UnderwaterDragMultiplier != 1.0f)
+                if (_pluginConfig.ModularCarSettings.UnderwaterDragMultiplier != 1.0f)
                     SetupCarDragReducer(car);
             }
         }
@@ -80,10 +81,10 @@ namespace Oxide.Plugins
         {
             if (heli is ScrapTransportHelicopter)
             {
-                if (pluginConfig.AllowedVehicles.ScrapTransportHelicopter)
+                if (_pluginConfig.AllowedVehicles.ScrapTransportHelicopter)
                     MoveWaterSample(heli.waterSample);
             }
-            else if (pluginConfig.AllowedVehicles.Minicopter)
+            else if (_pluginConfig.AllowedVehicles.Minicopter)
                 MoveWaterSample(heli.waterSample);
         }
 
@@ -103,7 +104,7 @@ namespace Oxide.Plugins
         private void SetupCarDragReducer(ModularCar car)
         {
             car.carPhysics.timeSinceWaterCheck = float.MinValue;
-            car.gameObject.AddComponent<CarDragReducer>().underwaterDragMultiplier = pluginConfig.ModularCarSettings.UnderwaterDragMultiplier;
+            car.gameObject.AddComponent<CarDragReducer>().underwaterDragMultiplier = _pluginConfig.ModularCarSettings.UnderwaterDragMultiplier;
         }
 
         private void TeardownCarDragReducer(ModularCar car)
@@ -157,7 +158,7 @@ namespace Oxide.Plugins
 
         private Configuration GetDefaultConfig() => new Configuration();
 
-        internal class Configuration : SerializableConfiguration
+        private class Configuration : SerializableConfiguration
         {
             [JsonProperty("AllowedVehicles")]
             public AllowedVehiclesConfig AllowedVehicles = new AllowedVehiclesConfig();
@@ -166,7 +167,7 @@ namespace Oxide.Plugins
             public ModularCarSettings ModularCarSettings = new ModularCarSettings();
         }
 
-        internal class AllowedVehiclesConfig
+        private class AllowedVehiclesConfig
         {
             [JsonProperty("Minicopter")]
             public bool Minicopter = false;
@@ -178,7 +179,7 @@ namespace Oxide.Plugins
             public bool ScrapTransportHelicopter = false;
         }
 
-        internal class ModularCarSettings
+        private class ModularCarSettings
         {
             [JsonProperty("UnderwaterDragMultiplier")]
             public float UnderwaterDragMultiplier = 1.0f;
@@ -188,14 +189,14 @@ namespace Oxide.Plugins
 
         #region Configuration Boilerplate
 
-        internal class SerializableConfiguration
+        private class SerializableConfiguration
         {
             public string ToJson() => JsonConvert.SerializeObject(this);
 
             public Dictionary<string, object> ToDictionary() => JsonHelper.Deserialize(ToJson()) as Dictionary<string, object>;
         }
 
-        internal static class JsonHelper
+        private static class JsonHelper
         {
             public static object Deserialize(string json) => ToObject(JToken.Parse(json));
 
@@ -257,27 +258,28 @@ namespace Oxide.Plugins
             return changed;
         }
 
-        protected override void LoadDefaultConfig() => pluginConfig = GetDefaultConfig();
+        protected override void LoadDefaultConfig() => _pluginConfig = GetDefaultConfig();
 
         protected override void LoadConfig()
         {
             base.LoadConfig();
             try
             {
-                pluginConfig = Config.ReadObject<Configuration>();
-                if (pluginConfig == null)
+                _pluginConfig = Config.ReadObject<Configuration>();
+                if (_pluginConfig == null)
                 {
                     throw new JsonException();
                 }
 
-                if (MaybeUpdateConfig(pluginConfig))
+                if (MaybeUpdateConfig(_pluginConfig))
                 {
                     LogWarning("Configuration appears to be outdated; updating and saving");
                     SaveConfig();
                 }
             }
-            catch
+            catch (Exception e)
             {
+                LogError(e.Message);
                 LogWarning($"Configuration file {Name}.json is invalid; using defaults");
                 LoadDefaultConfig();
             }
@@ -286,7 +288,7 @@ namespace Oxide.Plugins
         protected override void SaveConfig()
         {
             Log($"Configuration changes saved to {Name}.json");
-            Config.WriteObject(pluginConfig, true);
+            Config.WriteObject(_pluginConfig, true);
         }
 
         #endregion
