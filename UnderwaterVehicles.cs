@@ -50,8 +50,6 @@ namespace Oxide.Plugins
 
         private void OnServerInitialized(bool initialBoot)
         {
-            var allowedVehicles = _pluginConfig.AllowedVehicles;
-
             foreach (var entity in BaseNetworkable.serverEntities)
             {
                 var heli = entity as MiniCopter;
@@ -75,9 +73,9 @@ namespace Oxide.Plugins
             var car = vehicle as ModularCar;
             if (car != null)
             {
-                if (_pluginConfig.AllowedVehicles.ModularCar)
+                if (_pluginConfig.ModularCar.Enabled)
                 {
-                    UnderwaterVehicleComponent.AddToVehicle(car, _pluginConfig.DragSettings.ModularCar);
+                    UnderwaterVehicleComponent.AddToVehicle(car, _pluginConfig.ModularCar.DragMultiplier);
                 }
                 return;
             }
@@ -87,16 +85,16 @@ namespace Oxide.Plugins
             {
                 if (snowmobile.ShortPrefabName == "snowmobile")
                 {
-                    if (_pluginConfig.AllowedVehicles.Snowmobile)
+                    if (_pluginConfig.Snowmobile.Enabled)
                     {
-                        UnderwaterVehicleComponent.AddToVehicle(snowmobile, _pluginConfig.DragSettings.Snowmobile);
+                        UnderwaterVehicleComponent.AddToVehicle(snowmobile, _pluginConfig.Snowmobile.DragMultiplier);
                     }
                 }
                 else if (snowmobile.ShortPrefabName == "tomahasnowmobile")
                 {
-                    if (_pluginConfig.AllowedVehicles.TomahaSnowmobile)
+                    if (_pluginConfig.Tomaha.Enabled)
                     {
-                        UnderwaterVehicleComponent.AddToVehicle(snowmobile, _pluginConfig.DragSettings.TomahaSnowmobile);
+                        UnderwaterVehicleComponent.AddToVehicle(snowmobile, _pluginConfig.Tomaha.DragMultiplier);
                     }
                 }
                 return;
@@ -107,12 +105,12 @@ namespace Oxide.Plugins
         {
             if (heli is ScrapTransportHelicopter)
             {
-                if (_pluginConfig.AllowedVehicles.ScrapTransportHelicopter)
+                if (_pluginConfig.ScrapTransportHelicopter.Enabled)
                 {
                     UnderwaterVehicleComponent.AddToVehicle(heli);
                 }
             }
-            else if (_pluginConfig.AllowedVehicles.Minicopter)
+            else if (_pluginConfig.Minicopter.Enabled)
             {
                 UnderwaterVehicleComponent.AddToVehicle(heli);
             }
@@ -247,37 +245,37 @@ namespace Oxide.Plugins
 
         private Configuration GetDefaultConfig() => new Configuration();
 
-        private class AllowedVehiclesConfig
+        private class VehicleConfig
+        {
+            [JsonProperty("Enabled", Order = -3)]
+            public bool Enabled;
+        }
+
+        private class GroundVehicleConfig : VehicleConfig
+        {
+            [JsonProperty("DragMultiplier", Order = -2)]
+            public float DragMultiplier = 1;
+        }
+
+        private class DeprecatedAllowedVehiclesConfig
         {
             [JsonProperty("Minicopter")]
-            public bool Minicopter = false;
+            public bool Minicopter;
 
             [JsonProperty("ModularCar")]
-            public bool ModularCar = false;
+            public bool ModularCar;
 
             [JsonProperty("ScrapTransportHelicopter")]
-            public bool ScrapTransportHelicopter = false;
+            public bool ScrapTransportHelicopter;
 
             [JsonProperty("Snowmobile")]
-            public bool Snowmobile = false;
+            public bool Snowmobile;
 
             [JsonProperty("TomahaSnowmobile")]
-            public bool TomahaSnowmobile = false;
+            public bool TomahaSnowmobile;
         }
 
-        private class DragMultipliers
-        {
-            [JsonProperty("ModularCar")]
-            public float ModularCar = 1;
-
-            [JsonProperty("Snowmobile")]
-            public float Snowmobile = 1;
-
-            [JsonProperty("TomahaSnowmobile")]
-            public float TomahaSnowmobile = 1;
-        }
-
-        private class ModularCarSettings
+        private class DeprecatedModularCarSettings
         {
             [JsonProperty("UnderwaterDragMultiplier")]
             public float UnderwaterDragMultiplier = 1;
@@ -285,16 +283,35 @@ namespace Oxide.Plugins
 
         private class Configuration : SerializableConfiguration
         {
+            [JsonProperty("ModularCar")]
+            public GroundVehicleConfig ModularCar = new GroundVehicleConfig();
+
+            [JsonProperty("Snowmobile")]
+            public GroundVehicleConfig Snowmobile = new GroundVehicleConfig();
+
+            [JsonProperty("Tomaha")]
+            public GroundVehicleConfig Tomaha = new GroundVehicleConfig();
+
+            [JsonProperty("Minicopter")]
+            public VehicleConfig Minicopter = new VehicleConfig();
+
+            [JsonProperty("ScrapTransportHelicopter")]
+            public VehicleConfig ScrapTransportHelicopter = new VehicleConfig();
+
             [JsonProperty("AllowedVehicles")]
-            public AllowedVehiclesConfig AllowedVehicles = new AllowedVehiclesConfig();
+            public DeprecatedAllowedVehiclesConfig AllowedVehicles
+            {
+                set
+                {
+                    ModularCar.Enabled = value.ModularCar;
+                    Minicopter.Enabled = value.Minicopter;
+                    ScrapTransportHelicopter.Enabled = value.ScrapTransportHelicopter;
+                }
+            }
 
-            [JsonProperty("UnderwaterDragMultiplier")]
-            public DragMultipliers DragSettings = new DragMultipliers();
-
-            // Deprecated
             [JsonProperty("ModularCarSettings")]
-            public ModularCarSettings ModularCarSettings
-            { set { DragSettings.ModularCar = value.UnderwaterDragMultiplier; } }
+            public DeprecatedModularCarSettings ModularCarSettings
+            { set { ModularCar.DragMultiplier = value.UnderwaterDragMultiplier; } }
         }
 
         #endregion
