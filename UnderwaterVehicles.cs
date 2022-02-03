@@ -17,6 +17,9 @@ namespace Oxide.Plugins
         private static UnderwaterVehicles _pluginInstance;
         private Configuration _pluginConfig;
 
+        private const string SnowmobileShortPrefabName = "snowmobile";
+        private const string TomahaShortPrefabName = "tomahasnowmobile";
+
         #endregion
 
         #region Hooks
@@ -24,6 +27,12 @@ namespace Oxide.Plugins
         private void Init()
         {
             _pluginInstance = this;
+
+            if (!_pluginConfig.IsAnyDragMultiplerEnabled())
+            {
+                Unsubscribe(nameof(OnEntityMounted));
+                Unsubscribe(nameof(OnEntityDismounted));
+            }
         }
 
         private void Unload()
@@ -83,14 +92,14 @@ namespace Oxide.Plugins
             var snowmobile = vehicle as Snowmobile;
             if (snowmobile != null)
             {
-                if (snowmobile.ShortPrefabName == "snowmobile")
+                if (snowmobile.ShortPrefabName == SnowmobileShortPrefabName)
                 {
                     if (_pluginConfig.Snowmobile.Enabled)
                     {
                         UnderwaterVehicleComponent.AddToVehicle(snowmobile, _pluginConfig.Snowmobile.DragMultiplier);
                     }
                 }
-                else if (snowmobile.ShortPrefabName == "tomahasnowmobile")
+                else if (snowmobile.ShortPrefabName == TomahaShortPrefabName)
                 {
                     if (_pluginConfig.Tomaha.Enabled)
                     {
@@ -116,6 +125,44 @@ namespace Oxide.Plugins
             }
         }
 
+        private void OnEntityMounted(BaseVehicleSeat seat)
+        {
+            var groundVehicle = GetParentVehicle(seat) as GroundVehicle;
+            if (groundVehicle == null
+                || groundVehicle.NumMounted() > 1
+                || _pluginConfig.GetDragMultiplier(groundVehicle) == 1)
+            {
+                return;
+            }
+
+            var component = UnderwaterVehicleComponent.GetForVehicle(groundVehicle);
+            if (component == null)
+            {
+                return;
+            }
+
+            component.EnableCustomDrag();
+        }
+
+        private void OnEntityDismounted(BaseVehicleSeat seat)
+        {
+            var groundVehicle = GetParentVehicle(seat) as GroundVehicle;
+            if (groundVehicle == null
+                || groundVehicle.NumMounted() > 0
+                || _pluginConfig.GetDragMultiplier(groundVehicle) == 1)
+            {
+                return;
+            }
+
+            var component = UnderwaterVehicleComponent.GetForVehicle(groundVehicle);
+            if (component == null)
+            {
+                return;
+            }
+
+            component.DisableCustomDrag();
+        }
+
         #endregion
 
         #region Helper Methods
@@ -137,6 +184,23 @@ namespace Oxide.Plugins
             }
         }
 
+        private static BaseVehicle GetParentVehicle(BaseEntity entity)
+        {
+            var parent = entity.GetParentEntity();
+            if (parent == null)
+            {
+                return null;
+            }
+
+            var vehicleModule = parent as BaseVehicleModule;
+            if (vehicleModule != null)
+            {
+                return vehicleModule.Vehicle;
+            }
+
+            return parent as BaseVehicle;
+        }
+
         #endregion
 
         #region Helper Classes
@@ -146,8 +210,11 @@ namespace Oxide.Plugins
             public static void AddToVehicle(BaseVehicle vehicle, float dragMultiplier = 1) =>
                 vehicle.gameObject.AddComponent<UnderwaterVehicleComponent>().Init(dragMultiplier);
 
+            public static UnderwaterVehicleComponent GetForVehicle(BaseVehicle vehicle) =>
+                vehicle.gameObject.GetComponent<UnderwaterVehicleComponent>();
+
             public static void RemoveFromVehicle(BaseVehicle vehicle) =>
-                DestroyImmediate(vehicle.gameObject.GetComponent<UnderwaterVehicleComponent>());
+                DestroyImmediate(GetForVehicle(vehicle));
 
             private BaseVehicle _vehicle;
             private Transform _waterLoggedPoint;
@@ -188,11 +255,25 @@ namespace Oxide.Plugins
 
                 _dragMultiplier = dragMultiplier;
 
-                SetTimeSinceWaterCheck(_groundVehicle, float.MinValue);
-                InvokeRandomized(CheckWater, 0.25f, 0.25f, 0.05f);
+                if (_groundVehicle.AnyMounted())
+                {
+                    EnableCustomDrag();
+                }
             }
 
-            private void CheckWater()
+            public void EnableCustomDrag()
+            {
+                SetTimeSinceWaterCheck(_groundVehicle, float.MinValue);
+                InvokeRandomized(CustomDragCheck, 0.25f, 0.25f, 0.05f);
+            }
+
+            public void DisableCustomDrag()
+            {
+                SetTimeSinceWaterCheck(_groundVehicle, UnityEngine.Random.Range(0f, 0.25f));
+                CancelInvoke(CustomDragCheck);
+            }
+
+            private void CustomDragCheck()
             {
                 _pluginInstance?.TrackStart();
 
@@ -234,7 +315,7 @@ namespace Oxide.Plugins
 
                 if (_dragMultiplier != 1 && _groundVehicle != null && !_groundVehicle.IsDestroyed)
                 {
-                    SetTimeSinceWaterCheck(_groundVehicle, UnityEngine.Random.Range(0f, 0.25f));
+                    DisableCustomDrag();
                 }
             }
         }
@@ -312,6 +393,35 @@ namespace Oxide.Plugins
             [JsonProperty("ModularCarSettings")]
             public DeprecatedModularCarSettings ModularCarSettings
             { set { ModularCar.DragMultiplier = value.UnderwaterDragMultiplier; } }
+
+            public bool IsAnyDragMultiplerEnabled()
+            {
+                return ModularCar.Enabled && ModularCar.DragMultiplier != 1
+                    || Snowmobile.Enabled && Snowmobile.DragMultiplier != 1
+                    || Tomaha.Enabled && Tomaha.DragMultiplier != 1;
+            }
+
+            public float GetDragMultiplier(GroundVehicle groundVehicle)
+            {
+                if (groundVehicle is ModularCar)
+                {
+                    return ModularCar.DragMultiplier;
+                }
+
+                if (groundVehicle is Snowmobile)
+                {
+                    if (groundVehicle.ShortPrefabName == SnowmobileShortPrefabName)
+                    {
+                        return Snowmobile.DragMultiplier;
+                    }
+                    else if (groundVehicle.ShortPrefabName == TomahaShortPrefabName)
+                    {
+                        return Tomaha.DragMultiplier;
+                    }
+                }
+
+                return 1;
+            }
         }
 
         #endregion
