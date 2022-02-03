@@ -14,7 +14,6 @@ namespace Oxide.Plugins
     {
         #region Fields
 
-        private static UnderwaterVehicles _pluginInstance;
         private Configuration _pluginConfig;
 
         private const string SnowmobileShortPrefabName = "snowmobile";
@@ -26,8 +25,6 @@ namespace Oxide.Plugins
 
         private void Init()
         {
-            _pluginInstance = this;
-
             if (!_pluginConfig.IsAnyDragMultiplerEnabled())
             {
                 Unsubscribe(nameof(OnEntityMounted));
@@ -53,8 +50,6 @@ namespace Oxide.Plugins
                     continue;
                 }
             }
-
-            _pluginInstance = null;
         }
 
         private void OnServerInitialized(bool initialBoot)
@@ -275,27 +270,20 @@ namespace Oxide.Plugins
 
             private void CustomDragCheck()
             {
-                _pluginInstance?.TrackStart();
-
-                if (!_groundVehicle.rigidBody.IsSleeping())
+                // Most of this code is identical to the vanilla drag computation
+                float throttleInput = _groundVehicle.IsOn() ? _groundVehicle.GetThrottleInput() : 0;
+                float waterFactor = _groundVehicle.WaterFactor() * _dragMultiplier;
+                float drag = 0f;
+                TriggerVehicleDrag triggerResult;
+                if (_groundVehicle.FindTrigger(out triggerResult))
                 {
-                    // Most of this code is identical to the vanilla drag computation
-                    float throttleInput = _groundVehicle.IsOn() ? _groundVehicle.GetThrottleInput() : 0;
-                    float waterFactor = _groundVehicle.WaterFactor() * _dragMultiplier;
-                    float drag = 0f;
-                    TriggerVehicleDrag triggerResult;
-                    if (_groundVehicle.FindTrigger(out triggerResult))
-                    {
-                        drag = triggerResult.vehicleDrag;
-                    }
-                    float throttleDrag = (throttleInput != 0) ? 0 : 0.25f;
-                    drag = Mathf.Max(waterFactor, drag);
-                    drag = Mathf.Max(drag, _groundVehicle.GetModifiedDrag());
-                    _groundVehicle.rigidBody.drag = Mathf.Max(throttleDrag, drag);
-                    _groundVehicle.rigidBody.angularDrag = drag * 0.5f;
+                    drag = triggerResult.vehicleDrag;
                 }
-
-                _pluginInstance?.TrackEnd();
+                float throttleDrag = (throttleInput != 0) ? 0 : 0.25f;
+                drag = Mathf.Max(waterFactor, drag);
+                drag = Mathf.Max(drag, _groundVehicle.GetModifiedDrag());
+                _groundVehicle.rigidBody.drag = Mathf.Max(throttleDrag, drag);
+                _groundVehicle.rigidBody.angularDrag = drag * 0.5f;
             }
 
             private void OnDestroy()
