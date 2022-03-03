@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Underwater Vehicles", "WhiteThunder", "1.2.0")]
+    [Info("Underwater Vehicles", "WhiteThunder", "1.3.0")]
     [Description("Allows modular cars, snowmobiles and helicopters to be used underwater.")]
     internal class UnderwaterVehicles : CovalencePlugin
     {
@@ -103,6 +103,16 @@ namespace Oxide.Plugins
                 }
                 return;
             }
+
+            var magnetCrane = vehicle as MagnetCrane;
+            if (magnetCrane != null)
+            {
+                if (_pluginConfig.MagnetCrane.Enabled)
+                {
+                    UnderwaterVehicleComponent.AddToVehicle(magnetCrane);
+                }
+                return;
+            }
         }
 
         private void OnEntitySpawned(MiniCopter heli)
@@ -164,17 +174,17 @@ namespace Oxide.Plugins
 
         private static void SetTimeSinceWaterCheck(GroundVehicle groundVehicle, float value)
         {
-            var snowmobile = groundVehicle as Snowmobile;
-            if (snowmobile != null)
-            {
-                snowmobile.carPhysics.timeSinceWaterCheck = value;
-                return;
-            }
-
             var car = groundVehicle as ModularCar;
             if (car != null)
             {
                 car.carPhysics.timeSinceWaterCheck = value;
+                return;
+            }
+
+            var snowmobile = groundVehicle as Snowmobile;
+            if (snowmobile != null)
+            {
+                snowmobile.carPhysics.timeSinceWaterCheck = value;
                 return;
             }
         }
@@ -336,12 +346,6 @@ namespace Oxide.Plugins
 
             [JsonProperty("ScrapTransportHelicopter")]
             public bool ScrapTransportHelicopter;
-
-            [JsonProperty("Snowmobile")]
-            public bool Snowmobile;
-
-            [JsonProperty("TomahaSnowmobile")]
-            public bool TomahaSnowmobile;
         }
 
         private class DeprecatedModularCarSettings
@@ -360,6 +364,9 @@ namespace Oxide.Plugins
 
             [JsonProperty("Tomaha")]
             public GroundVehicleConfig Tomaha = new GroundVehicleConfig();
+
+            [JsonProperty("MagnetCrane")]
+            public VehicleConfig MagnetCrane = new VehicleConfig();
 
             [JsonProperty("Minicopter")]
             public VehicleConfig Minicopter = new VehicleConfig();

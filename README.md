@@ -1,7 +1,7 @@
 ## Features
 
 - Allows vehicles to be used underwater
-- Supports modular cars, snowmobiles, minicopters and scrap transport helicopters
+- Supports modular cars, snowmobiles, magnet cranes, minicopters and scrap transport helicopters
 - Allows adjusting underwater drag for ground vehicles
 
 ## Configuration
@@ -21,6 +21,9 @@ Default configuration:
   "Tomaha": {
     "Enabled": false,
     "DragMultiplier": 1.0
+  },
+  "MagnetCrane": {
+    "Enabled": false
   },
   "Minicopter": {
     "Enabled": false
