@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Underwater Vehicles", "WhiteThunder", "1.3.0")]
+    [Info("Underwater Vehicles", "WhiteThunder", "1.3.1")]
     [Description("Allows modular cars, snowmobiles and helicopters to be used underwater.")]
     internal class UnderwaterVehicles : CovalencePlugin
     {
@@ -25,6 +25,8 @@ namespace Oxide.Plugins
 
         private void Init()
         {
+            Unsubscribe(nameof(OnEntitySpawned));
+
             if (!_pluginConfig.IsAnyDragMultiplerEnabled())
             {
                 Unsubscribe(nameof(OnEntityMounted));
@@ -70,6 +72,8 @@ namespace Oxide.Plugins
                     continue;
                 }
             }
+
+            Subscribe(nameof(OnEntitySpawned));
         }
 
         private void OnEntitySpawned(GroundVehicle vehicle)
