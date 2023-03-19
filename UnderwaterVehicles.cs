@@ -1,6 +1,5 @@
 ﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Newtonsoft.Json.Serialization;
 using System;
 using System.Linq;
 using System.Collections.Generic;
@@ -27,7 +26,7 @@ namespace Oxide.Plugins
         {
             Unsubscribe(nameof(OnEntitySpawned));
 
-            if (!_pluginConfig.IsAnyDragMultiplerEnabled())
+            if (!_pluginConfig.IsAnyDragMultiplierEnabled())
             {
                 Unsubscribe(nameof(OnEntityMounted));
                 Unsubscribe(nameof(OnEntityDismounted));
@@ -54,7 +53,7 @@ namespace Oxide.Plugins
             }
         }
 
-        private void OnServerInitialized(bool initialBoot)
+        private void OnServerInitialized()
         {
             foreach (var entity in BaseNetworkable.serverEntities)
             {
@@ -140,15 +139,11 @@ namespace Oxide.Plugins
             if (groundVehicle == null
                 || groundVehicle.NumMounted() > 1
                 || _pluginConfig.GetDragMultiplier(groundVehicle) == 1)
-            {
                 return;
-            }
 
             var component = UnderwaterVehicleComponent.GetForVehicle(groundVehicle);
             if (component == null)
-            {
                 return;
-            }
 
             component.EnableCustomDrag();
         }
@@ -159,15 +154,11 @@ namespace Oxide.Plugins
             if (groundVehicle == null
                 || groundVehicle.NumMounted() > 0
                 || _pluginConfig.GetDragMultiplier(groundVehicle) == 1)
-            {
                 return;
-            }
 
             var component = UnderwaterVehicleComponent.GetForVehicle(groundVehicle);
             if (component == null)
-            {
                 return;
-            }
 
             component.DisableCustomDrag();
         }
@@ -197,15 +188,11 @@ namespace Oxide.Plugins
         {
             var parent = entity.GetParentEntity();
             if (parent == null)
-            {
                 return null;
-            }
 
             var vehicleModule = parent as BaseVehicleModule;
             if (vehicleModule != null)
-            {
                 return vehicleModule.Vehicle;
-            }
 
             return parent as BaseVehicle;
         }
@@ -216,14 +203,20 @@ namespace Oxide.Plugins
 
         private class UnderwaterVehicleComponent : FacepunchBehaviour
         {
-            public static void AddToVehicle(BaseVehicle vehicle, float dragMultiplier = 1) =>
+            public static void AddToVehicle(BaseVehicle vehicle, float dragMultiplier = 1)
+            {
                 vehicle.gameObject.AddComponent<UnderwaterVehicleComponent>().Init(dragMultiplier);
+            }
 
-            public static UnderwaterVehicleComponent GetForVehicle(BaseVehicle vehicle) =>
-                vehicle.gameObject.GetComponent<UnderwaterVehicleComponent>();
+            public static UnderwaterVehicleComponent GetForVehicle(BaseVehicle vehicle)
+            {
+                return vehicle.gameObject.GetComponent<UnderwaterVehicleComponent>();
+            }
 
-            public static void RemoveFromVehicle(BaseVehicle vehicle) =>
+            public static void RemoveFromVehicle(BaseVehicle vehicle)
+            {
                 DestroyImmediate(GetForVehicle(vehicle));
+            }
 
             private BaseVehicle _vehicle;
             private Transform _waterLoggedPoint;
@@ -285,15 +278,15 @@ namespace Oxide.Plugins
             private void CustomDragCheck()
             {
                 // Most of this code is identical to the vanilla drag computation
-                float throttleInput = _groundVehicle.IsOn() ? _groundVehicle.GetThrottleInput() : 0;
-                float waterFactor = _groundVehicle.WaterFactor() * _dragMultiplier;
-                float drag = 0f;
+                var throttleInput = _groundVehicle.IsOn() ? _groundVehicle.GetThrottleInput() : 0;
+                var waterFactor = _groundVehicle.WaterFactor() * _dragMultiplier;
+                var drag = 0f;
                 TriggerVehicleDrag triggerResult;
                 if (_groundVehicle.FindTrigger(out triggerResult))
                 {
                     drag = triggerResult.vehicleDrag;
                 }
-                float throttleDrag = (throttleInput != 0) ? 0 : 0.25f;
+                var throttleDrag = (throttleInput != 0) ? 0 : 0.25f;
                 drag = Mathf.Max(waterFactor, drag);
                 drag = Mathf.Max(drag, _groundVehicle.GetModifiedDrag());
                 _groundVehicle.rigidBody.drag = Mathf.Max(throttleDrag, drag);
@@ -326,8 +319,6 @@ namespace Oxide.Plugins
 
         #region Configuration
 
-        private Configuration GetDefaultConfig() => new Configuration();
-
         private class VehicleConfig
         {
             [JsonProperty("Enabled", Order = -3)]
@@ -338,24 +329,6 @@ namespace Oxide.Plugins
         {
             [JsonProperty("DragMultiplier", Order = -2)]
             public float DragMultiplier = 1;
-        }
-
-        private class DeprecatedAllowedVehiclesConfig
-        {
-            [JsonProperty("Minicopter")]
-            public bool Minicopter;
-
-            [JsonProperty("ModularCar")]
-            public bool ModularCar;
-
-            [JsonProperty("ScrapTransportHelicopter")]
-            public bool ScrapTransportHelicopter;
-        }
-
-        private class DeprecatedModularCarSettings
-        {
-            [JsonProperty("UnderwaterDragMultiplier")]
-            public float UnderwaterDragMultiplier = 1;
         }
 
         private class Configuration : SerializableConfiguration
@@ -378,22 +351,7 @@ namespace Oxide.Plugins
             [JsonProperty("ScrapTransportHelicopter")]
             public VehicleConfig ScrapTransportHelicopter = new VehicleConfig();
 
-            [JsonProperty("AllowedVehicles")]
-            public DeprecatedAllowedVehiclesConfig AllowedVehicles
-            {
-                set
-                {
-                    ModularCar.Enabled = value.ModularCar;
-                    Minicopter.Enabled = value.Minicopter;
-                    ScrapTransportHelicopter.Enabled = value.ScrapTransportHelicopter;
-                }
-            }
-
-            [JsonProperty("ModularCarSettings")]
-            public DeprecatedModularCarSettings ModularCarSettings
-            { set { ModularCar.DragMultiplier = value.UnderwaterDragMultiplier; } }
-
-            public bool IsAnyDragMultiplerEnabled()
+            public bool IsAnyDragMultiplierEnabled()
             {
                 return ModularCar.Enabled && ModularCar.DragMultiplier != 1
                     || Snowmobile.Enabled && Snowmobile.DragMultiplier != 1
@@ -423,9 +381,9 @@ namespace Oxide.Plugins
             }
         }
 
-        #endregion
+        private Configuration GetDefaultConfig() => new Configuration();
 
-        #region Configuration Boilerplate
+        #region Configuration Helpers
 
         private class SerializableConfiguration
         {
@@ -465,7 +423,7 @@ namespace Oxide.Plugins
 
         private bool MaybeUpdateConfigDict(Dictionary<string, object> currentWithDefaults, Dictionary<string, object> currentRaw)
         {
-            bool changed = false;
+            var changed = false;
 
             foreach (var key in currentWithDefaults.Keys)
             {
@@ -528,6 +486,8 @@ namespace Oxide.Plugins
             Log($"Configuration changes saved to {Name}.json");
             Config.WriteObject(_pluginConfig, true);
         }
+
+        #endregion
 
         #endregion
     }
