@@ -3,185 +3,102 @@ using Newtonsoft.Json.Linq;
 using System;
 using System.Linq;
 using System.Collections.Generic;
+using Oxide.Core;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Underwater Vehicles", "WhiteThunder", "1.3.1")]
-    [Description("Allows modular cars, snowmobiles and helicopters to be used underwater.")]
+    [Info("Underwater Vehicles", "WhiteThunder", "1.4.0")]
+    [Description("Allows modular cars, snowmobiles, magnet cranes, and helicopters to be used underwater.")]
     internal class UnderwaterVehicles : CovalencePlugin
     {
         #region Fields
 
-        private Configuration _pluginConfig;
+        private Configuration _config;
+        private VehicleInfoManager _vehicleInfoManager;
 
-        private const string SnowmobileShortPrefabName = "snowmobile";
-        private const string TomahaShortPrefabName = "tomahasnowmobile";
+        public UnderwaterVehicles()
+        {
+            _vehicleInfoManager = new VehicleInfoManager(this);
+        }
 
         #endregion
 
         #region Hooks
 
-        private void Init()
+        private void OnServerInitialized()
         {
-            Unsubscribe(nameof(OnEntitySpawned));
+            _vehicleInfoManager.OnServerInitialized();
 
-            if (!_pluginConfig.IsAnyDragMultiplierEnabled())
+            NextTick(() =>
             {
-                Unsubscribe(nameof(OnEntityMounted));
-                Unsubscribe(nameof(OnEntityDismounted));
-            }
+                foreach (var player in BasePlayer.activePlayerList)
+                {
+                    var seat = player.GetMounted() as BaseVehicleSeat;
+                    if (seat == null)
+                        continue;
+
+                    OnEntityMounted(seat);
+                }
+            });
         }
 
         private void Unload()
         {
-            foreach (var entity in BaseNetworkable.serverEntities)
+            foreach (var networkable in BaseNetworkable.serverEntities)
             {
-                var heli = entity as MiniCopter;
-                if (heli != null)
-                {
-                    UnderwaterVehicleComponent.RemoveFromVehicle(heli);
+                var vehicle = networkable as BaseVehicle;
+                if ((object)vehicle == null)
                     continue;
-                }
 
-                var groundVehicle = entity as GroundVehicle;
-                if (groundVehicle != null)
-                {
-                    UnderwaterVehicleComponent.RemoveFromVehicle(groundVehicle);
+                var vehicleInfo = _vehicleInfoManager.GetVehicleInfo(vehicle);
+                if (vehicleInfo == null || !vehicleInfo.Config.Enabled)
                     continue;
-                }
-            }
-        }
 
-        private void OnServerInitialized()
-        {
-            foreach (var entity in BaseNetworkable.serverEntities)
-            {
-                var heli = entity as MiniCopter;
-                if (heli != null)
-                {
-                    OnEntitySpawned(heli);
-                    continue;
-                }
-
-                var groundVehicle = entity as GroundVehicle;
-                if (groundVehicle != null)
-                {
-                    OnEntitySpawned(groundVehicle);
-                    continue;
-                }
-            }
-
-            Subscribe(nameof(OnEntitySpawned));
-        }
-
-        private void OnEntitySpawned(GroundVehicle vehicle)
-        {
-            var car = vehicle as ModularCar;
-            if (car != null)
-            {
-                if (_pluginConfig.ModularCar.Enabled)
-                {
-                    UnderwaterVehicleComponent.AddToVehicle(car, _pluginConfig.ModularCar.DragMultiplier);
-                }
-                return;
-            }
-
-            var snowmobile = vehicle as Snowmobile;
-            if (snowmobile != null)
-            {
-                if (snowmobile.ShortPrefabName == SnowmobileShortPrefabName)
-                {
-                    if (_pluginConfig.Snowmobile.Enabled)
-                    {
-                        UnderwaterVehicleComponent.AddToVehicle(snowmobile, _pluginConfig.Snowmobile.DragMultiplier);
-                    }
-                }
-                else if (snowmobile.ShortPrefabName == TomahaShortPrefabName)
-                {
-                    if (_pluginConfig.Tomaha.Enabled)
-                    {
-                        UnderwaterVehicleComponent.AddToVehicle(snowmobile, _pluginConfig.Tomaha.DragMultiplier);
-                    }
-                }
-                return;
-            }
-
-            var magnetCrane = vehicle as MagnetCrane;
-            if (magnetCrane != null)
-            {
-                if (_pluginConfig.MagnetCrane.Enabled)
-                {
-                    UnderwaterVehicleComponent.AddToVehicle(magnetCrane);
-                }
-                return;
-            }
-        }
-
-        private void OnEntitySpawned(MiniCopter heli)
-        {
-            if (heli is ScrapTransportHelicopter)
-            {
-                if (_pluginConfig.ScrapTransportHelicopter.Enabled)
-                {
-                    UnderwaterVehicleComponent.AddToVehicle(heli);
-                }
-            }
-            else if (_pluginConfig.Minicopter.Enabled)
-            {
-                UnderwaterVehicleComponent.AddToVehicle(heli);
+                UnderwaterVehicleComponent.RemoveFromVehicle(vehicle);
             }
         }
 
         private void OnEntityMounted(BaseVehicleSeat seat)
         {
-            var groundVehicle = GetParentVehicle(seat) as GroundVehicle;
-            if (groundVehicle == null
-                || groundVehicle.NumMounted() > 1
-                || _pluginConfig.GetDragMultiplier(groundVehicle) == 1)
-                return;
-
-            var component = UnderwaterVehicleComponent.GetForVehicle(groundVehicle);
-            if (component == null)
-                return;
-
-            component.EnableCustomDrag();
+            HandleSeatMountedChanged(seat);
         }
 
         private void OnEntityDismounted(BaseVehicleSeat seat)
         {
-            var groundVehicle = GetParentVehicle(seat) as GroundVehicle;
-            if (groundVehicle == null
-                || groundVehicle.NumMounted() > 0
-                || _pluginConfig.GetDragMultiplier(groundVehicle) == 1)
-                return;
+            HandleSeatMountedChanged(seat);
+        }
 
-            var component = UnderwaterVehicleComponent.GetForVehicle(groundVehicle);
-            if (component == null)
-                return;
+        #endregion
 
-            component.DisableCustomDrag();
+        #region Exposed Hooks
+
+        private static class ExposedHooks
+        {
+            public static object OnVehicleUnderwaterEnable(BaseEntity vehicle)
+            {
+                return Interface.CallHook("OnVehicleUnderwaterEnable", vehicle);
+            }
         }
 
         #endregion
 
         #region Helper Methods
 
-        private static void SetTimeSinceWaterCheck(GroundVehicle groundVehicle, float value)
+        private static string[] FindPrefabsOfType<T>() where T : BaseEntity
         {
-            var car = groundVehicle as ModularCar;
-            if (car != null)
+            var prefabList = new List<string>();
+
+            foreach (var assetPath in GameManifest.Current.entities)
             {
-                car.carPhysics.timeSinceWaterCheck = value;
-                return;
+                var entity = GameManager.server.FindPrefab(assetPath)?.GetComponent<T>();
+                if (entity == null)
+                    continue;
+
+                prefabList.Add(entity.PrefabName);
             }
 
-            var snowmobile = groundVehicle as Snowmobile;
-            if (snowmobile != null)
-            {
-                snowmobile.carPhysics.timeSinceWaterCheck = value;
-                return;
-            }
+            return prefabList.ToArray();
         }
 
         private static BaseVehicle GetParentVehicle(BaseEntity entity)
@@ -197,121 +114,363 @@ namespace Oxide.Plugins
             return parent as BaseVehicle;
         }
 
+        private bool VehicleHasPermission(BaseVehicle vehicle, IVehicleInfo vehicleInfo)
+        {
+            if (!vehicleInfo.Config.RequireOccupantPermission)
+                return true;
+
+            if (!vehicle.AnyMounted())
+                return false;
+
+            foreach (var mountPointInfo in vehicle.allMountPoints)
+            {
+                var player = mountPointInfo.mountable?.GetMounted();
+                if (player == null)
+                    continue;
+
+                if (permission.UserHasPermission(player.UserIDString, vehicleInfo.Permission))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private void RefreshUnderwaterCapability(BaseVehicle vehicle, IVehicleInfo vehicleInfo)
+        {
+            var vehicleHasPermission = VehicleHasPermission(vehicle, vehicleInfo);
+
+            var component = UnderwaterVehicleComponent.GetForVehicle(vehicle);
+            if (component == null)
+            {
+                if (!vehicleHasPermission)
+                    return;
+
+                component = UnderwaterVehicleComponent.AddToVehicle(vehicle, vehicleInfo);
+            }
+
+            if (vehicleHasPermission)
+            {
+                if (!component.IsUnderwaterCapable)
+                {
+                    component.EnableUnderwater();
+                }
+                else if (vehicle.AnyMounted())
+                {
+                    component.EnableCustomDrag();
+                }
+            }
+            else if (component.IsUnderwaterCapable)
+            {
+                component.DisableUnderwater();
+            }
+        }
+
+        private void HandleSeatMountedChanged(BaseVehicleSeat seat)
+        {
+            var vehicle = GetParentVehicle(seat);
+            if (vehicle == null)
+                return;
+
+            var vehicleInfo = _vehicleInfoManager.GetVehicleInfo(vehicle);
+            if (vehicleInfo == null || !vehicleInfo.Config.Enabled)
+                return;
+
+            RefreshUnderwaterCapability(vehicle, vehicleInfo);
+        }
+
         #endregion
 
         #region Helper Classes
 
         private class UnderwaterVehicleComponent : FacepunchBehaviour
         {
-            public static void AddToVehicle(BaseVehicle vehicle, float dragMultiplier = 1)
+            public static UnderwaterVehicleComponent AddToVehicle(BaseVehicle vehicle, IVehicleInfo vehicleInfo)
             {
-                vehicle.gameObject.AddComponent<UnderwaterVehicleComponent>().Init(dragMultiplier);
+                var component = vehicle.gameObject.AddComponent<UnderwaterVehicleComponent>();
+                component._vehicleInfo = vehicleInfo;
+                component._vehicle = vehicle;
+
+                var waterLoggedPoint = vehicleInfo.GetWaterLoggedPoint(vehicle);
+                component._waterLoggedPoint = waterLoggedPoint;
+                component._waterLoggedPointParent = waterLoggedPoint.parent;
+                component._waterLoggedPointLocalPosition = waterLoggedPoint.localPosition;
+
+                var groundVehicle = vehicle as GroundVehicle;
+                var groundVehicleConfig = vehicleInfo.Config as GroundVehicleConfig;
+                if ((object)groundVehicle != null && groundVehicleConfig != null)
+                {
+                    var component2 = component;
+                    var groundVehicle2 = groundVehicle;
+                    var dragMultiplier = groundVehicleConfig.DragMultiplier;
+                    component._customDragCheck = () => component2.CustomDragCheck(groundVehicle2, dragMultiplier);
+                }
+
+                return component;
             }
 
-            public static UnderwaterVehicleComponent GetForVehicle(BaseVehicle vehicle)
+            public static UnderwaterVehicleComponent GetForVehicle(BaseEntity vehicle)
             {
                 return vehicle.gameObject.GetComponent<UnderwaterVehicleComponent>();
             }
 
-            public static void RemoveFromVehicle(BaseVehicle vehicle)
+            public static void RemoveFromVehicle(BaseEntity vehicle)
             {
                 DestroyImmediate(GetForVehicle(vehicle));
             }
 
+            public bool IsUnderwaterCapable { get; private set; }
+            private IVehicleInfo _vehicleInfo;
             private BaseVehicle _vehicle;
             private Transform _waterLoggedPoint;
+            private Transform _waterLoggedPointParent;
             private Vector3 _waterLoggedPointLocalPosition;
+            private Action _customDragCheck;
 
-            private GroundVehicle _groundVehicle;
-            private float _dragMultiplier = 1;
-
-            private void Awake()
+            public void EnableUnderwater()
             {
-                _vehicle = GetComponent<BaseVehicle>();
-                _groundVehicle = _vehicle as GroundVehicle;
-
-                var groundVehicle = _vehicle as GroundVehicle;
-                if (groundVehicle != null)
-                {
-                    _waterLoggedPoint = groundVehicle.waterloggedPoint;
-                }
-
-                var heli = _vehicle as MiniCopter;
-                if (heli != null)
-                {
-                    _waterLoggedPoint = heli.waterSample;
-                }
-
-                if (_waterLoggedPoint != null && _waterLoggedPoint.parent != null)
-                {
-                    _waterLoggedPointLocalPosition = _waterLoggedPoint.localPosition;
-                    _waterLoggedPoint.SetParent(null);
-                    _waterLoggedPoint.position = new Vector3(0, 1000, 0);
-                }
-            }
-
-            public void Init(float dragMultiplier)
-            {
-                if (dragMultiplier == 1 || _groundVehicle == null)
+                if (IsUnderwaterCapable
+                    || _waterLoggedPoint == null
+                    || _waterLoggedPoint.parent == null)
                     return;
 
-                _dragMultiplier = dragMultiplier;
+                var hookResult = ExposedHooks.OnVehicleUnderwaterEnable(_vehicle);
+                if (hookResult is bool && !(bool)hookResult)
+                    return;
 
-                if (_groundVehicle.AnyMounted())
-                {
-                    EnableCustomDrag();
-                }
+                _waterLoggedPoint.SetParent(null);
+                _waterLoggedPoint.position = new Vector3(0, 1000, 0);
+                IsUnderwaterCapable = true;
+
+                EnableCustomDrag();
+            }
+
+            public void DisableUnderwater()
+            {
+                if (!IsUnderwaterCapable
+                    || _waterLoggedPoint == null
+                    || _waterLoggedPoint.parent == _waterLoggedPointParent)
+                    return;
+
+                _waterLoggedPoint.SetParent(_waterLoggedPointParent);
+                _waterLoggedPoint.transform.localPosition = _waterLoggedPointLocalPosition;
+                IsUnderwaterCapable = false;
+
+                DisableCustomDrag();
             }
 
             public void EnableCustomDrag()
             {
-                SetTimeSinceWaterCheck(_groundVehicle, float.MinValue);
-                InvokeRandomized(CustomDragCheck, 0.25f, 0.25f, 0.05f);
+                if (_customDragCheck == null
+                    || IsInvoking(_customDragCheck))
+                    return;
+
+                _vehicleInfo.SetTimeSinceWaterCheck(_vehicle, float.MinValue);
+                InvokeRandomized(_customDragCheck, 0.25f, 0.25f, 0.05f);
             }
 
-            public void DisableCustomDrag()
+            private void DisableCustomDrag()
             {
-                SetTimeSinceWaterCheck(_groundVehicle, UnityEngine.Random.Range(0f, 0.25f));
-                CancelInvoke(CustomDragCheck);
+                if (_customDragCheck == null
+                    || !IsInvoking(_customDragCheck))
+                    return;
+
+                _vehicleInfo.SetTimeSinceWaterCheck(_vehicle, UnityEngine.Random.Range(0f, 0.25f));
+                CancelInvoke(_customDragCheck);
             }
 
-            private void CustomDragCheck()
+            private void CustomDragCheck(GroundVehicle groundVehicle, float dragMultiplier)
             {
                 // Most of this code is identical to the vanilla drag computation
-                var throttleInput = _groundVehicle.IsOn() ? _groundVehicle.GetThrottleInput() : 0;
-                var waterFactor = _groundVehicle.WaterFactor() * _dragMultiplier;
+                var throttleInput = groundVehicle.IsOn() ? groundVehicle.GetThrottleInput() : 0;
+                var waterFactor = groundVehicle.WaterFactor() * dragMultiplier;
                 var drag = 0f;
                 TriggerVehicleDrag triggerResult;
-                if (_groundVehicle.FindTrigger(out triggerResult))
+                if (groundVehicle.FindTrigger(out triggerResult))
                 {
                     drag = triggerResult.vehicleDrag;
                 }
                 var throttleDrag = (throttleInput != 0) ? 0 : 0.25f;
                 drag = Mathf.Max(waterFactor, drag);
-                drag = Mathf.Max(drag, _groundVehicle.GetModifiedDrag());
-                _groundVehicle.rigidBody.drag = Mathf.Max(throttleDrag, drag);
-                _groundVehicle.rigidBody.angularDrag = drag * 0.5f;
+                drag = Mathf.Max(drag, groundVehicle.GetModifiedDrag());
+                groundVehicle.rigidBody.drag = Mathf.Max(throttleDrag, drag);
+                groundVehicle.rigidBody.angularDrag = drag * 0.5f;
             }
 
             private void OnDestroy()
             {
-                if (_waterLoggedPoint != null)
+                if (_vehicle != null && !_vehicle.IsDestroyed)
                 {
-                    if (_vehicle != null && !_vehicle.IsDestroyed)
+                    DisableUnderwater();
+
+                    var groundVehicle = _vehicle as GroundVehicle;
+                    if ((object)groundVehicle != null)
                     {
-                        _waterLoggedPoint.SetParent(_vehicle.transform);
-                        _waterLoggedPoint.transform.localPosition = _waterLoggedPointLocalPosition;
+                        DisableCustomDrag();
                     }
-                    else
+                }
+                else if (_waterLoggedPoint != null)
+                {
+                    Destroy(_waterLoggedPoint.gameObject);
+                }
+            }
+        }
+
+        #endregion
+
+        #region Vehicle Info
+
+        private interface IVehicleInfo
+        {
+            VehicleConfig Config { get; }
+            uint[] PrefabIds { get; }
+            string Permission { get; }
+
+            void OnServerInitialized(UnderwaterVehicles plugin);
+            bool IsCorrectType(BaseEntity entity);
+            Transform GetWaterLoggedPoint(BaseEntity entity);
+            void SetTimeSinceWaterCheck(BaseEntity entity, float deltaTime);
+        }
+
+        private class VehicleInfo<T> : IVehicleInfo where T : BaseEntity
+        {
+            public VehicleConfig Config { get; set; }
+            public uint[] PrefabIds { get; private set; }
+            public string Permission { get; private set; }
+
+            public string VehicleName { get; set; }
+            public string[] PrefabPaths { get; set; }
+            public Func<T, Transform> FindWaterLoggedPoint { private get; set; } = entity => null;
+            public Action<T, float> ApplyTimeSinceWaterCheck { private get; set; } = (entity, deltaTime) => {};
+
+            public void OnServerInitialized(UnderwaterVehicles plugin)
+            {
+                Permission = $"{nameof(UnderwaterVehicles)}.occupant.{VehicleName}".ToLower();
+                plugin.permission.RegisterPermission(Permission, plugin);
+
+                var prefabIds = new List<uint>(PrefabPaths.Length);
+
+                foreach (var prefabName in PrefabPaths)
+                {
+                    var prefab = GameManager.server.FindPrefab(prefabName)?.GetComponent<T>();
+                    if (prefab == null)
                     {
-                        Destroy(_waterLoggedPoint.gameObject);
+                        plugin.LogError($"Invalid or incorrect prefab. Please alert the plugin maintainer -- {prefabName}");
+                        continue;
                     }
+
+                    prefabIds.Add(prefab.prefabID);
                 }
 
-                if (_dragMultiplier != 1 && _groundVehicle != null && !_groundVehicle.IsDestroyed)
+                PrefabIds = prefabIds.ToArray();
+            }
+
+            public bool IsCorrectType(BaseEntity entity)
+            {
+                return entity is T;
+            }
+
+            public Transform GetWaterLoggedPoint(BaseEntity entity)
+            {
+                var entityOfType = entity as T;
+                if ((object)entityOfType == null)
+                    return null;
+
+                return FindWaterLoggedPoint(entityOfType);
+            }
+
+            public void SetTimeSinceWaterCheck(BaseEntity entity, float deltaTime)
+            {
+                var entityOfType = entity as T;
+                if ((object)entityOfType == null)
+                    return;
+
+                ApplyTimeSinceWaterCheck(entityOfType, deltaTime);
+            }
+        }
+
+        private class VehicleInfoManager
+        {
+            private readonly UnderwaterVehicles _plugin;
+
+            private readonly Dictionary<uint, IVehicleInfo> _prefabIdToVehicleInfo = new Dictionary<uint, IVehicleInfo>();
+            private IVehicleInfo[] _allVehicles;
+
+            private Configuration _config => _plugin._config;
+
+            public VehicleInfoManager(UnderwaterVehicles plugin)
+            {
+                _plugin = plugin;
+            }
+
+            public void OnServerInitialized()
+            {
+                _allVehicles = new IVehicleInfo[]
                 {
-                    DisableCustomDrag();
+                    new VehicleInfo<ModularCar>
+                    {
+                        VehicleName = "modularcar",
+                        PrefabPaths = FindPrefabsOfType<ModularCar>(),
+                        Config = _config.ModularCar,
+                        FindWaterLoggedPoint = vehicle => vehicle.waterloggedPoint,
+                        ApplyTimeSinceWaterCheck = (car, deltaTime) => car.carPhysics.timeSinceWaterCheck = deltaTime,
+                    },
+                    new VehicleInfo<Snowmobile>
+                    {
+                        VehicleName = "snowmobile",
+                        PrefabPaths = new[] { "assets/content/vehicles/snowmobiles/snowmobile.prefab" },
+                        Config = _config.Snowmobile,
+                        FindWaterLoggedPoint = vehicle => vehicle.waterloggedPoint,
+                        ApplyTimeSinceWaterCheck = (vehicle, deltaTime) => vehicle.carPhysics.timeSinceWaterCheck = deltaTime,
+                    },
+                    new VehicleInfo<Snowmobile>
+                    {
+                        VehicleName = "tomaha",
+                        PrefabPaths = new[] { "assets/content/vehicles/snowmobiles/tomahasnowmobile.prefab" },
+                        Config = _config.Tomaha,
+                        FindWaterLoggedPoint = vehicle => vehicle.waterloggedPoint,
+                        ApplyTimeSinceWaterCheck = (vehicle, deltaTime) => vehicle.carPhysics.timeSinceWaterCheck = deltaTime,
+                    },
+                    new VehicleInfo<MagnetCrane>
+                    {
+                        VehicleName = "magnetcrane",
+                        PrefabPaths = new[] { "assets/content/vehicles/crane_magnet/magnetcrane.entity.prefab" },
+                        Config = _config.MagnetCrane,
+                        FindWaterLoggedPoint = vehicle => vehicle.waterloggedPoint,
+                        ApplyTimeSinceWaterCheck = (vehicle, deltaTime) => vehicle.carPhysics.timeSinceWaterCheck = deltaTime,
+                    },
+                    new VehicleInfo<MiniCopter>
+                    {
+                        VehicleName = "minicopter",
+                        PrefabPaths = new[] { "assets/content/vehicles/minicopter/minicopter.entity.prefab" },
+                        Config = _config.Minicopter,
+                        FindWaterLoggedPoint = vehicle => vehicle.waterSample,
+                    },
+                    new VehicleInfo<ScrapTransportHelicopter>
+                    {
+                        VehicleName = "scraptransport",
+                        PrefabPaths = new[] { "assets/content/vehicles/scrap heli carrier/scraptransporthelicopter.prefab" },
+                        Config = _config.ScrapTransportHelicopter,
+                        FindWaterLoggedPoint = vehicle => vehicle.waterSample,
+                    },
+                };
+
+                foreach (var vehicleInfo in _allVehicles)
+                {
+                    vehicleInfo.OnServerInitialized(_plugin);
+
+                    foreach (var prefabId in vehicleInfo.PrefabIds)
+                    {
+                        _prefabIdToVehicleInfo[prefabId] = vehicleInfo;
+                    }
                 }
+            }
+
+            public IVehicleInfo GetVehicleInfo(BaseEntity entity)
+            {
+                IVehicleInfo vehicleInfo;
+                return _prefabIdToVehicleInfo.TryGetValue(entity.prefabID, out vehicleInfo) && vehicleInfo.IsCorrectType(entity)
+                    ? vehicleInfo
+                    : null;
             }
         }
 
@@ -319,18 +478,24 @@ namespace Oxide.Plugins
 
         #region Configuration
 
+        [JsonObject(MemberSerialization.OptIn)]
         private class VehicleConfig
         {
-            [JsonProperty("Enabled", Order = -3)]
+            [JsonProperty("Enabled", Order = -4)]
             public bool Enabled;
+
+            [JsonProperty("RequireOccupantPermission", Order = -3)]
+            public bool RequireOccupantPermission;
         }
 
+        [JsonObject(MemberSerialization.OptIn)]
         private class GroundVehicleConfig : VehicleConfig
         {
             [JsonProperty("DragMultiplier", Order = -2)]
             public float DragMultiplier = 1;
         }
 
+        [JsonObject(MemberSerialization.OptIn)]
         private class Configuration : SerializableConfiguration
         {
             [JsonProperty("ModularCar")]
@@ -350,35 +515,6 @@ namespace Oxide.Plugins
 
             [JsonProperty("ScrapTransportHelicopter")]
             public VehicleConfig ScrapTransportHelicopter = new VehicleConfig();
-
-            public bool IsAnyDragMultiplierEnabled()
-            {
-                return ModularCar.Enabled && ModularCar.DragMultiplier != 1
-                    || Snowmobile.Enabled && Snowmobile.DragMultiplier != 1
-                    || Tomaha.Enabled && Tomaha.DragMultiplier != 1;
-            }
-
-            public float GetDragMultiplier(GroundVehicle groundVehicle)
-            {
-                if (groundVehicle is ModularCar)
-                {
-                    return ModularCar.DragMultiplier;
-                }
-
-                if (groundVehicle is Snowmobile)
-                {
-                    if (groundVehicle.ShortPrefabName == SnowmobileShortPrefabName)
-                    {
-                        return Snowmobile.DragMultiplier;
-                    }
-                    else if (groundVehicle.ShortPrefabName == TomahaShortPrefabName)
-                    {
-                        return Tomaha.DragMultiplier;
-                    }
-                }
-
-                return 1;
-            }
         }
 
         private Configuration GetDefaultConfig() => new Configuration();
@@ -454,20 +590,20 @@ namespace Oxide.Plugins
             return changed;
         }
 
-        protected override void LoadDefaultConfig() => _pluginConfig = GetDefaultConfig();
+        protected override void LoadDefaultConfig() => _config = GetDefaultConfig();
 
         protected override void LoadConfig()
         {
             base.LoadConfig();
             try
             {
-                _pluginConfig = Config.ReadObject<Configuration>();
-                if (_pluginConfig == null)
+                _config = Config.ReadObject<Configuration>();
+                if (_config == null)
                 {
                     throw new JsonException();
                 }
 
-                if (MaybeUpdateConfig(_pluginConfig))
+                if (MaybeUpdateConfig(_config))
                 {
                     LogWarning("Configuration appears to be outdated; updating and saving");
                     SaveConfig();
@@ -484,7 +620,7 @@ namespace Oxide.Plugins
         protected override void SaveConfig()
         {
             Log($"Configuration changes saved to {Name}.json");
-            Config.WriteObject(_pluginConfig, true);
+            Config.WriteObject(_config, true);
         }
 
         #endregion
