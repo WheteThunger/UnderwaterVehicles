@@ -38,7 +38,8 @@ Default configuration:
   },
   "MagnetCrane": {
     "Enabled": false,
-    "RequireOccupantPermission": false
+    "RequireOccupantPermission": false,
+    "DragMultiplier": 1.0
   },
   "Minicopter": {
     "Enabled": false,

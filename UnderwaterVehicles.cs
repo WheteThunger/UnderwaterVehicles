@@ -508,7 +508,7 @@ namespace Oxide.Plugins
             public GroundVehicleConfig Tomaha = new GroundVehicleConfig();
 
             [JsonProperty("MagnetCrane")]
-            public VehicleConfig MagnetCrane = new VehicleConfig();
+            public GroundVehicleConfig MagnetCrane = new GroundVehicleConfig();
 
             [JsonProperty("Minicopter")]
             public VehicleConfig Minicopter = new VehicleConfig();
