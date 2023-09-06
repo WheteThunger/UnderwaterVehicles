@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Underwater Vehicles", "WhiteThunder", "1.4.0")]
+    [Info("Underwater Vehicles", "WhiteThunder", "1.4.1")]
     [Description("Allows modular cars, snowmobiles, magnet cranes, and helicopters to be used underwater.")]
     internal class UnderwaterVehicles : CovalencePlugin
     {
@@ -438,19 +438,19 @@ namespace Oxide.Plugins
                         FindWaterLoggedPoint = vehicle => vehicle.waterloggedPoint,
                         ApplyTimeSinceWaterCheck = (vehicle, deltaTime) => vehicle.carPhysics.timeSinceWaterCheck = deltaTime,
                     },
-                    new VehicleInfo<MiniCopter>
+                    new VehicleInfo<Minicopter>
                     {
                         VehicleName = "minicopter",
                         PrefabPaths = new[] { "assets/content/vehicles/minicopter/minicopter.entity.prefab" },
                         Config = _config.Minicopter,
-                        FindWaterLoggedPoint = vehicle => vehicle.waterSample,
+                        FindWaterLoggedPoint = vehicle => vehicle.engineController.waterloggedPoint,
                     },
                     new VehicleInfo<ScrapTransportHelicopter>
                     {
                         VehicleName = "scraptransport",
                         PrefabPaths = new[] { "assets/content/vehicles/scrap heli carrier/scraptransporthelicopter.prefab" },
                         Config = _config.ScrapTransportHelicopter,
-                        FindWaterLoggedPoint = vehicle => vehicle.waterSample,
+                        FindWaterLoggedPoint = vehicle => vehicle.engineController.waterloggedPoint,
                     },
                 };
 
