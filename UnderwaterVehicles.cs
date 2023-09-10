@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Underwater Vehicles", "WhiteThunder", "1.4.1")]
+    [Info("Underwater Vehicles", "WhiteThunder", "1.5.0")]
     [Description("Allows modular cars, snowmobiles, magnet cranes, and helicopters to be used underwater.")]
     internal class UnderwaterVehicles : CovalencePlugin
     {
@@ -452,6 +452,13 @@ namespace Oxide.Plugins
                         Config = _config.ScrapTransportHelicopter,
                         FindWaterLoggedPoint = vehicle => vehicle.engineController.waterloggedPoint,
                     },
+                    new VehicleInfo<AttackHelicopter>
+                    {
+                        VehicleName = "attackhelicopter",
+                        PrefabPaths = new[] { "assets/content/vehicles/attackhelicopter/attackhelicopter.entity.prefab" },
+                        Config = _config.AttackHelicopter,
+                        FindWaterLoggedPoint = vehicle => vehicle.engineController.waterloggedPoint,
+                    },
                 };
 
                 foreach (var vehicleInfo in _allVehicles)
@@ -515,6 +522,9 @@ namespace Oxide.Plugins
 
             [JsonProperty("ScrapTransportHelicopter")]
             public VehicleConfig ScrapTransportHelicopter = new VehicleConfig();
+
+            [JsonProperty("AttackHelicopter")]
+            public VehicleConfig AttackHelicopter = new VehicleConfig();
         }
 
         private Configuration GetDefaultConfig() => new Configuration();

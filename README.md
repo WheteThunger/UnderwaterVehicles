@@ -1,7 +1,7 @@
 ## Features
 
 - Allows vehicles to be used underwater, optionally requiring permission
-- Supports modular cars, snowmobiles, magnet cranes, minicopters and scrap transport helicopters
+- Supports modular cars, snowmobiles, magnet cranes, minicopters, scrap transport helicopters and attack helicopters
 - Allows adjusting underwater drag for ground vehicles
 
 ## Permissions
@@ -14,6 +14,7 @@ Using the plugin's default configuration, permissions have no effect. However, i
 - `underwatervehicles.occupant.magnetcrane`
 - `underwatervehicles.occupant.minicopter`
 - `underwatervehicles.occupant.scraptransport`
+- `underwatervehicles.occupant.attackhelicopter`
 
 ## Configuration
 
@@ -46,6 +47,10 @@ Default configuration:
     "RequireOccupantPermission": false
   },
   "ScrapTransportHelicopter": {
+    "Enabled": false,
+    "RequireOccupantPermission": false
+  },
+  "AttackHelicopter": {
     "Enabled": false,
     "RequireOccupantPermission": false
   }
