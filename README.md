@@ -11,6 +11,10 @@ Using the plugin's default configuration, permissions have no effect. However, i
 - `underwatervehicles.occupant.modularcar`
 - `underwatervehicles.occupant.snowmobile`
 - `underwatervehicles.occupant.tomaha`
+- `underwatervehicles.occupant.motorbike.sidecar`
+- `underwatervehicles.occupant.motorbike`
+- `underwatervehicles.occupant.pedalbike`
+- `underwatervehicles.occupant.pedaltrike`
 - `underwatervehicles.occupant.magnetcrane`
 - `underwatervehicles.occupant.minicopter`
 - `underwatervehicles.occupant.scraptransport`
@@ -33,6 +37,26 @@ Default configuration:
     "DragMultiplier": 1.0
   },
   "Tomaha": {
+    "Enabled": false,
+    "RequireOccupantPermission": false,
+    "DragMultiplier": 1.0
+  },
+  "MotorBikeSidecar": {
+    "Enabled": false,
+    "RequireOccupantPermission": false,
+    "DragMultiplier": 1.0
+  },
+  "MotorBike": {
+    "Enabled": false,
+    "RequireOccupantPermission": false,
+    "DragMultiplier": 1.0
+  },
+  "PedalBike": {
+    "Enabled": false,
+    "RequireOccupantPermission": false,
+    "DragMultiplier": 1.0
+  },
+  "PedalTrike": {
     "Enabled": false,
     "RequireOccupantPermission": false,
     "DragMultiplier": 1.0

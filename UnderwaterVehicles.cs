@@ -3,12 +3,13 @@ using Newtonsoft.Json.Linq;
 using System;
 using System.Linq;
 using System.Collections.Generic;
+using System.Reflection;
 using Oxide.Core;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Underwater Vehicles", "WhiteThunder", "1.5.0")]
+    [Info("Underwater Vehicles", "WhiteThunder", "1.6.0")]
     [Description("Allows modular cars, snowmobiles, magnet cranes, and helicopters to be used underwater.")]
     internal class UnderwaterVehicles : CovalencePlugin
     {
@@ -390,6 +391,9 @@ namespace Oxide.Plugins
 
         private class VehicleInfoManager
         {
+            private static readonly FieldInfo BikeCarPhysicsField = typeof(Bike).GetField("carPhysics",
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
             private readonly UnderwaterVehicles _plugin;
 
             private readonly Dictionary<uint, IVehicleInfo> _prefabIdToVehicleInfo = new Dictionary<uint, IVehicleInfo>();
@@ -429,6 +433,38 @@ namespace Oxide.Plugins
                         Config = _config.Tomaha,
                         FindWaterLoggedPoint = vehicle => vehicle.waterloggedPoint,
                         ApplyTimeSinceWaterCheck = (vehicle, deltaTime) => vehicle.carPhysics.timeSinceWaterCheck = deltaTime,
+                    },
+                    new VehicleInfo<Bike>
+                    {
+                        VehicleName = "motorbike.sidecar",
+                        PrefabPaths = new[] { "assets/content/vehicles/bikes/motorbike_sidecar.prefab" },
+                        Config = _config.MotorBikeSidecar,
+                        FindWaterLoggedPoint = vehicle => vehicle.waterloggedPoint,
+                        ApplyTimeSinceWaterCheck = (vehicle, deltaTime) => ((CarPhysics<Bike>)BikeCarPhysicsField.GetValue(vehicle)).timeSinceWaterCheck = deltaTime,
+                    },
+                    new VehicleInfo<Bike>
+                    {
+                        VehicleName = "motorbike",
+                        PrefabPaths = new[] { "assets/content/vehicles/bikes/motorbike.prefab" },
+                        Config = _config.MotorBike,
+                        FindWaterLoggedPoint = vehicle => vehicle.waterloggedPoint,
+                        ApplyTimeSinceWaterCheck = (vehicle, deltaTime) => ((CarPhysics<Bike>)BikeCarPhysicsField.GetValue(vehicle)).timeSinceWaterCheck = deltaTime,
+                    },
+                    new VehicleInfo<Bike>
+                    {
+                        VehicleName = "pedalbike",
+                        PrefabPaths = new[] { "assets/content/vehicles/bikes/pedalbike.prefab" },
+                        Config = _config.PedalBike,
+                        FindWaterLoggedPoint = vehicle => vehicle.waterloggedPoint,
+                        ApplyTimeSinceWaterCheck = (vehicle, deltaTime) => ((CarPhysics<Bike>)BikeCarPhysicsField.GetValue(vehicle)).timeSinceWaterCheck = deltaTime,
+                    },
+                    new VehicleInfo<Bike>
+                    {
+                        VehicleName = "pedaltrike",
+                        PrefabPaths = new[] { "assets/content/vehicles/bikes/pedaltrike.prefab" },
+                        Config = _config.PedalTrike,
+                        FindWaterLoggedPoint = vehicle => vehicle.waterloggedPoint,
+                        ApplyTimeSinceWaterCheck = (vehicle, deltaTime) => ((CarPhysics<Bike>)BikeCarPhysicsField.GetValue(vehicle)).timeSinceWaterCheck = deltaTime,
                     },
                     new VehicleInfo<MagnetCrane>
                     {
@@ -513,6 +549,18 @@ namespace Oxide.Plugins
 
             [JsonProperty("Tomaha")]
             public GroundVehicleConfig Tomaha = new GroundVehicleConfig();
+
+            [JsonProperty("MotorBikeSidecar")]
+            public GroundVehicleConfig MotorBikeSidecar = new GroundVehicleConfig();
+
+            [JsonProperty("MotorBike")]
+            public GroundVehicleConfig MotorBike = new GroundVehicleConfig();
+
+            [JsonProperty("PedalBike")]
+            public GroundVehicleConfig PedalBike = new GroundVehicleConfig();
+
+            [JsonProperty("PedalTrike")]
+            public GroundVehicleConfig PedalTrike = new GroundVehicleConfig();
 
             [JsonProperty("MagnetCrane")]
             public GroundVehicleConfig MagnetCrane = new GroundVehicleConfig();
